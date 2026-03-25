@@ -12,6 +12,7 @@ from fastapi.responses import PlainTextResponse
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi.responses import Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.status import HTTP_401_UNAUTHORIZED
 
@@ -155,6 +156,10 @@ def _startup() -> None:
 def health() -> dict[str, Any]:
     return {"ok": True, "service": "ipocal"}
 
+@app.head("/health")
+def health_head() -> Response:
+    return Response(status_code=200)
+
 @app.get("/api/refresh_status")
 def refresh_status() -> dict[str, Any]:
     return {
@@ -163,6 +168,10 @@ def refresh_status() -> dict[str, Any]:
         "last_refresh_result": getattr(app.state, "last_refresh_result", None),
         "last_refresh_error": getattr(app.state, "last_refresh_error", None),
     }
+
+@app.head("/api/refresh_status")
+def refresh_status_head() -> Response:
+    return Response(status_code=200)
 
 
 @app.get("/refresh")
@@ -291,6 +300,12 @@ def index(
             "selected_count": selected_count,
         },
     )
+
+
+@app.head("/")
+def index_head() -> Response:
+    # Render health check probes HEAD /
+    return Response(status_code=200)
 
 
 def _status(today: date, sub_start: date, sub_end: date) -> str:
