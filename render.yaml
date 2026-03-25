@@ -7,10 +7,8 @@ services:
     envVars:
       - key: PORT
         value: "8000"
+      # Free plan does not support persistent disks.
+      # SQLite cache will reset on redeploy/restart; app will refetch data.
       - key: IPOCAL_DB_PATH
-        value: "/var/data/data.sqlite3"
-    disk:
-      name: ipocal-data
-      mountPath: /var/data
-      sizeGB: 1
+        value: "/tmp/data.sqlite3"
 
