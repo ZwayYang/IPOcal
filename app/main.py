@@ -226,8 +226,8 @@ def index(
     selected_count = sum(1 for o in offers if o["selected"])
 
     return templates.TemplateResponse(
-        "index.html",
-        {
+        name="index.html",
+        context={
             "request": request,
             "today": today,
             "horizon_days": horizon_days,
