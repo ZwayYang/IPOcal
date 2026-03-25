@@ -31,6 +31,18 @@ def _templates_dir() -> str:
 templates = Jinja2Templates(directory=_templates_dir())
 app.mount("/static", StaticFiles(directory=str(Path(__file__).resolve().parents[1] / "static")), name="static")
 
+def _render(request: Request, name: str, context: dict[str, Any]) -> HTMLResponse:
+    """
+    Starlette's Jinja2Templates.TemplateResponse signature differs by version:
+    - Newer: TemplateResponse(name, context)
+    - Older: TemplateResponse(request, name, context)
+    We support both for local + Render runtime compatibility.
+    """
+    try:
+        return templates.TemplateResponse(name, context)  # type: ignore[arg-type]
+    except TypeError:
+        return templates.TemplateResponse(request, name, context)  # type: ignore[misc]
+
 
 def _env(name: str) -> str | None:
     import os
@@ -225,9 +237,10 @@ def index(
     ]
     selected_count = sum(1 for o in offers if o["selected"])
 
-    return templates.TemplateResponse(
-        name="index.html",
-        context={
+    return _render(
+        request,
+        "index.html",
+        {
             "request": request,
             "today": today,
             "horizon_days": horizon_days,
