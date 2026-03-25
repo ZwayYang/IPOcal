@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import json
 
 import httpx
 from bs4 import BeautifulSoup
@@ -192,10 +193,13 @@ def fetch_histock_offers(client: httpx.Client | None = None) -> list[OfferRow]:
         remark = _cell_text(tds, remark_col) or ""
 
         seq += 1
-        raw_json = (
-            '{"source":"histock","underwritten_lots":'
-            + f'"{under_lots.strip()}",'
-            + f'"remark":"{remark.replace(chr(34), "")}"}'
+        raw_json = json.dumps(
+            {
+                "source": "histock",
+                "underwritten_lots": under_lots.strip(),
+                "remark": remark,
+            },
+            ensure_ascii=False,
         )
 
         rows.append(
