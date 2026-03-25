@@ -27,17 +27,23 @@ def fetch_twse_public_form(yy: int, client: httpx.Client | None = None) -> TwseP
         close_client = True
     try:
         try:
-            r = client.get(TWSE_PUBLIC_FORM_URL, params=params, headers={"User-Agent": "IPOcal/0.1"})
-            r.raise_for_status()
-            payload = r.json()
+            payload = _get_json_following_redirects(
+                client,
+                TWSE_PUBLIC_FORM_URL,
+                params=params,
+                headers={"User-Agent": "IPOcal/0.1"},
+            )
         except httpx.ConnectError as e:
             # Some Windows/Python builds may fail to validate TWSE's TLS chain.
             # Fallback to insecure TLS to keep the app usable; data is public.
             insecure = httpx.Client(timeout=20, verify=False, follow_redirects=True)
             try:
-                r = insecure.get(TWSE_PUBLIC_FORM_URL, params=params, headers={"User-Agent": "IPOcal/0.1"})
-                r.raise_for_status()
-                payload = r.json()
+                payload = _get_json_following_redirects(
+                    insecure,
+                    TWSE_PUBLIC_FORM_URL,
+                    params=params,
+                    headers={"User-Agent": "IPOcal/0.1"},
+                )
             finally:
                 insecure.close()
             _ = e
@@ -52,6 +58,37 @@ def fetch_twse_public_form(yy: int, client: httpx.Client | None = None) -> TwseP
     data = payload.get("data") or []
     src_year = int(payload.get("date") or 0)  # not critical; keep yy as requested
     return TwsePublicForm(year=src_year or yy, fields=fields, data=data)
+
+
+def _get_json_following_redirects(
+    client: httpx.Client,
+    url: str,
+    *,
+    params: dict[str, str],
+    headers: dict[str, str],
+    max_hops: int = 5,
+) -> dict:
+    """
+    Render (and some network paths) may return 307 from TWSE even when a client
+    is configured to follow redirects. Be extra defensive:
+    - force follow_redirects=True on request
+    - if still receiving 3xx, manually follow Location
+    """
+    cur_url = url
+    cur_params = params
+    for _ in range(max_hops):
+        r = client.get(cur_url, params=cur_params, headers=headers, follow_redirects=True)
+        if 300 <= r.status_code < 400:
+            loc = r.headers.get("location")
+            if not loc:
+                r.raise_for_status()
+            # TWSE may redirect to a fully-qualified URL that already includes query params.
+            cur_url = str(httpx.URL(cur_url).join(loc))
+            cur_params = {}  # prevent duplicating query params
+            continue
+        r.raise_for_status()
+        return r.json()
+    raise RuntimeError(f"Too many redirects when fetching TWSE publicForm: {url}")
 
 
 def to_offer_rows(form: TwsePublicForm, fetched_at: datetime | None = None) -> list[OfferRow]:
