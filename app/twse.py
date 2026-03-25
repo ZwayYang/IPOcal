@@ -77,15 +77,40 @@ def _get_json_following_redirects(
     cur_url = url
     cur_params = params
     for _ in range(max_hops):
-        r = client.get(cur_url, params=cur_params, headers=headers, follow_redirects=True)
+        r = client.get(
+            cur_url,
+            params=cur_params,
+            headers={
+                **headers,
+                "Accept": "application/json,text/plain,*/*",
+                "Referer": "https://www.twse.com.tw/",
+            },
+            follow_redirects=True,
+        )
+
+        # Some environments return 3xx but still include the JSON body.
         if 300 <= r.status_code < 400:
+            try:
+                maybe = r.json()
+                if isinstance(maybe, dict) and maybe.get("stat") == "OK":
+                    return maybe
+            except Exception:
+                pass
+
             loc = r.headers.get("location")
-            if not loc:
-                r.raise_for_status()
-            # TWSE may redirect to a fully-qualified URL that already includes query params.
-            cur_url = str(httpx.URL(cur_url).join(loc))
-            cur_params = {}  # prevent duplicating query params
-            continue
+            if loc:
+                # TWSE may redirect to a fully-qualified URL that already includes query params.
+                cur_url = str(httpx.URL(cur_url).join(loc))
+                cur_params = {}  # prevent duplicating query params
+                continue
+
+            # No Location and not JSON; fall through to raise with context.
+            raise httpx.HTTPStatusError(
+                f"Redirect without Location from TWSE: {r.status_code} {r.reason_phrase}",
+                request=r.request,
+                response=r,
+            )
+
         r.raise_for_status()
         return r.json()
     raise RuntimeError(f"Too many redirects when fetching TWSE publicForm: {url}")
