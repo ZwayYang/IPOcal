@@ -22,6 +22,18 @@
         </div>
       </div>
 
+      {% if request is defined %}
+      <div class="mt-4 rounded-xl border border-slate-200 bg-white/80 p-4 text-sm text-slate-700">
+        <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <span class="font-semibold">資料更新狀態：</span>
+            <span>首次上線/重啟後會先顯示 0 筆，背景抓取完成後才會出現資料。</span>
+          </div>
+          <div class="text-slate-500">若長時間仍是 0 筆，點一次「更新資料」再等 10–30 秒。</div>
+        </div>
+      </div>
+      {% endif %}
+
       <form id="calc-form" method="get" action="/">
       <div class="mt-6 grid gap-4 md:grid-cols-3">
         <div class="card md:col-span-2">

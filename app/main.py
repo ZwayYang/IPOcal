@@ -4,6 +4,7 @@ from datetime import date, datetime
 from pathlib import Path
 import threading
 from typing import Any
+import traceback
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI, Query, Request
@@ -81,6 +82,8 @@ class OptionalBasicAuthMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(OptionalBasicAuthMiddleware)
 
+_refresh_lock = threading.Lock()
+
 
 def refresh_twse_cache() -> dict[str, Any]:
     now = datetime.now()
@@ -102,21 +105,48 @@ def refresh_twse_cache() -> dict[str, Any]:
     return {"ok": True, "years": years, "rows_upserted": total, "refreshed_at": now.isoformat()}
 
 
+def schedule_refresh(background: bool = True) -> None:
+    """
+    Trigger a refresh and record status in app.state.
+    If background=True, run in a daemon thread.
+    """
+
+    def _run() -> None:
+        if not _refresh_lock.acquire(blocking=False):
+            app.state.refresh_status = "running"
+            return
+        try:
+            app.state.refresh_status = "running"
+            app.state.last_refresh_started_at = datetime.now().isoformat()
+            result = refresh_twse_cache()
+            app.state.last_refresh_result = result
+            app.state.last_refresh_error = None
+            app.state.refresh_status = "ok"
+        except Exception as e:
+            app.state.last_refresh_error = f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
+            app.state.refresh_status = "error"
+        finally:
+            _refresh_lock.release()
+
+    if background:
+        threading.Thread(target=_run, daemon=True).start()
+    else:
+        _run()
+
+
 @app.on_event("startup")
 def _startup() -> None:
     init_db()
     # IMPORTANT: never block startup on network fetches in production hosting.
     # Render (and similar platforms) can mark the service unhealthy if startup is slow.
-    def _bg_refresh() -> None:
-        try:
-            refresh_twse_cache()
-        except Exception:
-            pass
-
-    threading.Thread(target=_bg_refresh, daemon=True).start()
+    app.state.refresh_status = "idle"
+    app.state.last_refresh_started_at = None
+    app.state.last_refresh_result = None
+    app.state.last_refresh_error = None
+    schedule_refresh(background=True)
 
     scheduler = BackgroundScheduler(daemon=True)
-    scheduler.add_job(refresh_twse_cache, "cron", hour=6, minute=5)  # local time
+    scheduler.add_job(lambda: schedule_refresh(background=False), "cron", hour=6, minute=5)  # local time
     scheduler.start()
     app.state.scheduler = scheduler
 
@@ -125,10 +155,19 @@ def _startup() -> None:
 def health() -> dict[str, Any]:
     return {"ok": True, "service": "ipocal"}
 
+@app.get("/api/refresh_status")
+def refresh_status() -> dict[str, Any]:
+    return {
+        "status": getattr(app.state, "refresh_status", "unknown"),
+        "last_refresh_started_at": getattr(app.state, "last_refresh_started_at", None),
+        "last_refresh_result": getattr(app.state, "last_refresh_result", None),
+        "last_refresh_error": getattr(app.state, "last_refresh_error", None),
+    }
+
 
 @app.get("/refresh")
 def refresh() -> RedirectResponse:
-    refresh_twse_cache()
+    schedule_refresh(background=True)
     return RedirectResponse(url="/", status_code=303)
 
 
