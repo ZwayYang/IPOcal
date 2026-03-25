@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: ipocal
+    runtime: docker
+    plan: free
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: IPOCAL_DB_PATH
+        value: "/var/data/data.sqlite3"
+    disk:
+      name: ipocal-data
+      mountPath: /var/data
+      sizeGB: 1
+

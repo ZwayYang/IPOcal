@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+jinja2
+httpx
+apscheduler
+pydantic
+python-dateutil
+beautifulsoup4

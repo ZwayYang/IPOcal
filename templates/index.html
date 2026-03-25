@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>IPOcal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/app.css" />
+    <script defer src="/static/app.js"></script>
+  </head>
+  <body class="bg-gradient-to-b from-slate-50 via-slate-50 to-slate-100 text-slate-900">
+    <div class="mx-auto max-w-6xl px-4 py-8">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div class="text-2xl font-semibold tracking-tight">IPOcal（股票申購資金試算）</div>
+          <div class="mt-1 text-sm text-slate-600">
+            資料來源：TWSE 公開申購公告-抽籤日程表（快取於本機 SQLite）
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <a class="btn" href="/refresh">更新資料</a>
+        </div>
+      </div>
+
+      <form id="calc-form" method="get" action="/">
+      <div class="mt-6 grid gap-4 md:grid-cols-3">
+        <div class="card md:col-span-2">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <div class="text-sm text-slate-600">試算區間</div>
+              <div class="text-lg font-semibold">從 {{ today }} 起算</div>
+            </div>
+            <div class="flex items-end gap-2">
+              <div>
+                <label class="text-xs text-slate-600">未來天數</label>
+                <input class="input w-28" type="number" min="7" max="365" name="horizon_days" value="{{ horizon_days }}" />
+              </div>
+              <div>
+                <label class="text-xs text-slate-600">現有資金</label>
+                <input id="capital-input" class="input w-40" type="number" min="0" step="1000" name="capital" value="{{ capital }}" />
+              </div>
+              <button class="btn" type="submit">套用勾選並試算</button>
+            </div>
+          </div>
+          <div class="mt-4 grid gap-3 sm:grid-cols-2">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <div class="text-xs text-slate-600">最大資金需求（預設未中籤）</div>
+              <div id="max-apply" class="mt-1 text-2xl font-semibold tabular-nums">{{ "{:,}".format(max_apply) }}</div>
+              <div class="mt-1 text-xs text-slate-500">資金占用：扣款日(估) → 退款日(估)（退款開盤後入帳）</div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <div class="text-xs text-slate-600">可能需要借的最多金額</div>
+              <div id="max-borrow" class="mt-1 text-2xl font-semibold tabular-nums">{{ "{:,}".format(max_borrow) }}</div>
+              <div id="borrow-hint" class="mt-1 text-xs text-slate-500">以你的現有資金 {{ "{:,}".format(capital) }} 去比每日需款的最大缺口</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="text-sm text-slate-600">重要說明（MVP）</div>
+          <ul class="mt-2 list-disc pl-5 text-sm text-slate-700 space-y-1">
+            <li>扣款假設：申購最後一日「開盤前」扣款（以最保守需求試算）。</li>
+            <li>退款假設：抽籤次一營業日「開盤後」入帳，所以同一天無法拿退款去扣另一筆款。</li>
+            <li>承銷價未訂出時，金額會顯示為「—」。</li>
+            <li>中籤率只有已結案者 TWSE 會填；未結案通常是 0。</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="mt-8 card">
+        <div class="flex items-end justify-between gap-3">
+          <div>
+            <div class="text-lg font-semibold">公開申購/股票抽籤日程表（可勾選）</div>
+            <div class="text-sm text-slate-600">勾選後回到上方按「套用勾選並試算」</div>
+          </div>
+          <div class="text-sm text-slate-500">顯示 {{ offers|length }} 筆｜已勾選 {{ selected_count }} 筆</div>
+        </div>
+
+        <div class="mt-4 overflow-auto rounded-lg border border-slate-200 bg-white">
+          <table class="min-w-full text-sm">
+            <thead class="bg-slate-100 text-slate-700">
+              <tr>
+                <th class="px-3 py-2 text-left">參加</th>
+                <th class="px-3 py-2 text-left">抽籤日期</th>
+                <th class="px-3 py-2 text-left">股票代號/名稱</th>
+                <th class="px-3 py-2 text-left">市場</th>
+                <th class="px-3 py-2 text-left">申購</th>
+                <th class="px-3 py-2 text-left">扣款日(估)</th>
+                <th class="px-3 py-2 text-left">退款(估)</th>
+                <th class="px-3 py-2 text-right">承銷張數</th>
+                <th class="px-3 py-2 text-right">承銷價</th>
+                <th class="px-3 py-2 text-right">市價</th>
+                <th class="px-3 py-2 text-right">獲利</th>
+                <th class="px-3 py-2 text-right">報酬率(%)</th>
+                <th class="px-3 py-2 text-right">期望值</th>
+                <th class="px-3 py-2 text-right">申購張數</th>
+                <th class="px-3 py-2 text-right">需款(估)</th>
+                <th class="px-3 py-2 text-right">中籤率(%)</th>
+                <th class="px-3 py-2 text-left">備註</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              {% for o in offers %}
+              <tr class="hover:bg-slate-50 offer-row"
+                  data-symbol="{{ o.symbol }}"
+                  data-name="{{ o.name }}"
+                  data-amount="{{ o.amount if o.amount is not none else '' }}"
+                  data-lock-start="{{ o.lock_start }}"
+                  data-refund-date="{{ o.refund_date }}">
+                <td class="px-3 py-2">
+                  <input class="offer-check" type="checkbox" name="symbols" value="{{ o.symbol }}" {% if o.selected %}checked{% endif %} />
+                </td>
+                <td class="px-3 py-2 tabular-nums">{{ o.draw_date.strftime("%m/%d") }}</td>
+                <td class="px-3 py-2">
+                  <div class="font-medium tabular-nums">{{ o.symbol }}</div>
+                  <div class="text-slate-700">{{ o.name }}</div>
+                </td>
+                <td class="px-3 py-2 text-slate-600">{{ o.market }}</td>
+                <td class="px-3 py-2 tabular-nums">{{ o.sub_start.strftime("%m/%d") }} ~ {{ o.sub_end.strftime("%m/%d") }}</td>
+                <td class="px-3 py-2 tabular-nums">{{ o.lock_start.strftime("%m/%d") }}</td>
+                <td class="px-3 py-2 tabular-nums">{{ o.refund_date.strftime("%m/%d") }}</td>
+                <td class="px-3 py-2 text-right tabular-nums">{{ o.underwritten_lots }}</td>
+                <td class="px-3 py-2 text-right tabular-nums">{{ ("{:.2f}".format(o.price) if o.price is not none else "—") }}</td>
+                <td class="px-3 py-2 text-right tabular-nums">{{ ("{:.2f}".format(o.market_price) if o.market_price is not none else "—") }}</td>
+                <td class="px-3 py-2 text-right tabular-nums {% if o.profit is not none and o.profit > 0 %}text-rose-700 font-semibold{% elif o.profit is not none and o.profit < 0 %}text-emerald-700 font-semibold{% endif %}">
+                  {{ ("{:,}".format(o.profit) if o.profit is not none else "—") }}
+                </td>
+                <td class="px-3 py-2 text-right tabular-nums {% if o.roi_pct is not none and o.roi_pct > 0 %}text-rose-700 font-semibold{% elif o.roi_pct is not none and o.roi_pct < 0 %}text-emerald-700 font-semibold{% endif %}">
+                  {{ ("{:.1f}".format(o.roi_pct) if o.roi_pct is not none else "—") }}
+                </td>
+                {% set ev = none %}
+                {% if o.profit is not none %}
+                  {% set wr = (o.win_rate_pct|float) %}
+                  {% set ev = (o.profit * wr / 100.0) - 20.0 %}
+                {% endif %}
+                <td class="px-3 py-2 text-right tabular-nums {% if ev is not none and ev > 0 %}text-rose-700 font-semibold{% elif ev is not none and ev < 0 %}text-emerald-700 font-semibold{% endif %}">
+                  {{ ("{:.2f}".format(ev) if ev is not none else "—") }}
+                </td>
+                <td class="px-3 py-2 text-right tabular-nums">
+                  {{ (("{:,}".format((o.shares // 1000)|int)) if o.shares is not none else "—") }}
+                </td>
+                <td class="px-3 py-2 text-right tabular-nums">{{ ("{:,}".format(o.amount) if o.amount is not none else "—") }}</td>
+                <td class="px-3 py-2 text-right tabular-nums">{{ o.win_rate_pct }}</td>
+                <td class="px-3 py-2">
+                  <span class="badge {% if o.status == '申購中' %}badge-green{% elif o.status == '未開始' %}badge-blue{% else %}badge-gray{% endif %}">
+                    {{ o.status }}
+                  </span>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      </form>
+
+      <div class="mt-8 card">
+        <div class="text-lg font-semibold">每日資金需求（區間內）</div>
+        <div class="mt-1 text-sm text-slate-600">只計入「已勾選」的申購；預設未中籤（扣款日(估) → 退款日(估)）。</div>
+
+        <div class="mt-4 overflow-auto rounded-lg border border-slate-200 bg-white">
+          <table class="min-w-full text-sm">
+            <thead class="bg-slate-50 text-slate-700">
+              <tr>
+                <th class="px-4 py-2 text-left">日期</th>
+                <th class="px-4 py-2 text-right">需款</th>
+                <th class="px-4 py-2 text-right">缺口（需借）</th>
+                <th class="px-4 py-2 text-left">明細（扣款/退款）</th>
+              </tr>
+            </thead>
+            <tbody id="daily-body" class="divide-y divide-slate-100">
+              {% for row in daily_rows %}
+              <tr class="hover:bg-slate-50">
+                <td class="px-4 py-2 tabular-nums">{{ row.date }}</td>
+                <td class="px-4 py-2 text-right tabular-nums">{{ "{:,}".format(row.required) }}</td>
+                <td class="px-4 py-2 text-right tabular-nums {% if row.shortfall > 0 %}text-rose-700 font-semibold{% else %}text-slate-600{% endif %}">
+                  {{ "{:,}".format(row.shortfall) }}
+                </td>
+                <td class="px-4 py-2 text-slate-600">—</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
+
