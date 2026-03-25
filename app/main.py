@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from pathlib import Path
+import threading
 from typing import Any
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -92,16 +93,25 @@ def refresh_twse_cache() -> dict[str, Any]:
 @app.on_event("startup")
 def _startup() -> None:
     init_db()
-    try:
-        refresh_twse_cache()
-    except Exception:
-        # If TWSE is temporarily unavailable, app should still start.
-        pass
+    # IMPORTANT: never block startup on network fetches in production hosting.
+    # Render (and similar platforms) can mark the service unhealthy if startup is slow.
+    def _bg_refresh() -> None:
+        try:
+            refresh_twse_cache()
+        except Exception:
+            pass
+
+    threading.Thread(target=_bg_refresh, daemon=True).start()
 
     scheduler = BackgroundScheduler(daemon=True)
     scheduler.add_job(refresh_twse_cache, "cron", hour=6, minute=5)  # local time
     scheduler.start()
     app.state.scheduler = scheduler
+
+
+@app.get("/health")
+def health() -> dict[str, Any]:
+    return {"ok": True, "service": "ipocal"}
 
 
 @app.get("/refresh")
