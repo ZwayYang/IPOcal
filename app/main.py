@@ -17,9 +17,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.status import HTTP_401_UNAUTHORIZED
 
 from . import calc
-from .db import init_db, list_offers, update_histock_extras, update_histock_stats, upsert_offers
-from .histock import fetch_histock_public_table
-from .twse import fetch_twse_public_form, to_offer_rows
+from .db import init_db, list_offers, upsert_offers
+from .histock import fetch_histock_offers
 
 
 app = FastAPI(title="IPOcal", version="0.1")
@@ -86,24 +85,11 @@ app.add_middleware(OptionalBasicAuthMiddleware)
 _refresh_lock = threading.Lock()
 
 
-def refresh_twse_cache() -> dict[str, Any]:
+def refresh_cache() -> dict[str, Any]:
     now = datetime.now()
-    years = sorted({now.year, now.year - 1})
-    total = 0
-    for y in years:
-        form = fetch_twse_public_form(y)
-        rows = to_offer_rows(form)
-        total += upsert_offers(rows)
-    # Enrich with HiStock market price/profit/roi columns.
-    try:
-        extras = fetch_histock_public_table()
-        mapped = {k: (v.market_price, v.profit, v.roi_pct) for k, v in extras.items()}
-        mapped_stats = {k: (v.total_qualified, v.win_rate_pct) for k, v in extras.items()}
-        update_histock_extras(mapped)
-        update_histock_stats(mapped_stats)
-    except Exception:
-        pass
-    return {"ok": True, "years": years, "rows_upserted": total, "refreshed_at": now.isoformat()}
+    rows = fetch_histock_offers()
+    total = upsert_offers(rows)
+    return {"ok": True, "source": "histock", "rows_upserted": total, "refreshed_at": now.isoformat()}
 
 
 def schedule_refresh(background: bool = True) -> None:
@@ -119,7 +105,7 @@ def schedule_refresh(background: bool = True) -> None:
         try:
             app.state.refresh_status = "running"
             app.state.last_refresh_started_at = datetime.now().isoformat()
-            result = refresh_twse_cache()
+            result = refresh_cache()
             app.state.last_refresh_result = result
             app.state.last_refresh_error = None
             app.state.refresh_status = "ok"
@@ -208,10 +194,10 @@ def index(
         except Exception:
             raw_json = ""
         extra = _extra_from_raw_json(raw_json or "")
-        sub_start = calc.parse_roc_date(r["sub_start"])
-        sub_end = calc.parse_roc_date(r["sub_end"])
-        draw_date = calc.parse_roc_date(r["draw_date"])
-        allot_date = calc.parse_roc_date(r["allot_date"])
+        sub_start = calc.parse_date(r["sub_start"])
+        sub_end = calc.parse_date(r["sub_end"])
+        draw_date = calc.parse_date(r["draw_date"])
+        allot_date = calc.parse_date(r["allot_date"])
 
         if not sub_start or not sub_end or not draw_date:
             continue
@@ -325,6 +311,11 @@ def _extra_from_raw_json(raw_json: str) -> dict[str, Any]:
 
     try:
         payload = json.loads(raw_json)
+        if isinstance(payload, dict) and payload.get("source") == "histock":
+            return {
+                "underwritten_shares": "",
+                "underwritten_lots": str(payload.get("underwritten_lots") or "").strip(),
+            }
         record = payload.get("record") or []
         # TWSE "實際承銷股數" is shares. HiStock shows "承銷張數" (lots).
         underwritten_shares = record[8] if len(record) > 8 else ""

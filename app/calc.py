@@ -31,6 +31,30 @@ def parse_roc_date(s: str) -> date | None:
         return None
 
 
+def parse_date(s: str) -> date | None:
+    """
+    Accept multiple date formats:
+    - ROC: "115/03/24" -> 2026-03-24
+    - ISO: "2026-03-24"
+    - AD slash: "2026/03/24"
+    """
+    s = (s or "").strip()
+    if not s:
+        return None
+    if "/" in s and len(s.split("/", 2)[0]) <= 3:
+        return parse_roc_date(s)
+    try:
+        if "-" in s:
+            y, m, d = s.split("-", 2)
+            return date(int(y), int(m), int(d))
+        if "/" in s:
+            y, m, d = s.split("/", 2)
+            return date(int(y), int(m), int(d))
+    except Exception:
+        return None
+    return None
+
+
 def add_business_days(d: date, days: int) -> date:
     step = 1 if days >= 0 else -1
     remaining = abs(days)
