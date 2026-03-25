@@ -23,7 +23,7 @@ def fetch_twse_public_form(yy: int, client: httpx.Client | None = None) -> TwseP
     params = {"response": "json", "yy": str(yy)}
     close_client = False
     if client is None:
-        client = httpx.Client(timeout=20)
+        client = httpx.Client(timeout=20, follow_redirects=True)
         close_client = True
     try:
         try:
@@ -33,7 +33,7 @@ def fetch_twse_public_form(yy: int, client: httpx.Client | None = None) -> TwseP
         except httpx.ConnectError as e:
             # Some Windows/Python builds may fail to validate TWSE's TLS chain.
             # Fallback to insecure TLS to keep the app usable; data is public.
-            insecure = httpx.Client(timeout=20, verify=False)
+            insecure = httpx.Client(timeout=20, verify=False, follow_redirects=True)
             try:
                 r = insecure.get(TWSE_PUBLIC_FORM_URL, params=params, headers={"User-Agent": "IPOcal/0.1"})
                 r.raise_for_status()
