@@ -175,7 +175,7 @@ def api_offers() -> JSONResponse:
 @app.get("/", response_class=HTMLResponse)
 def index(
     request: Request,
-    horizon_days: int = 30,
+    horizon_days: int = 14,
     capital: int = 0,
     symbols: list[str] = Query(default=[]),
 ) -> HTMLResponse:
