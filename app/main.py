@@ -312,8 +312,21 @@ def _md_slash(d: date) -> str:
 
 
 def _daily_detail_line(day: date, offers_for_detail: Sequence[dict[str, Any]], shortfall: int) -> str:
-    """與 static/app.js 明細邏輯一致：扣款日列匯撥(D-2營)/借款(D-1營)期限。"""
+    """與 static/app.js 明細邏輯一致：D-2/D-1 當日提醒、扣款日附匯撥／借款期限。"""
     parts: list[str] = []
+    wire_hints = [o for o in offers_for_detail if o["wire_by_date"] == day]
+    loan_hints = [o for o in offers_for_detail if o["loan_apply_by_date"] == day]
+    wire_hints.sort(key=lambda o: str(o["symbol"]))
+    loan_hints.sort(key=lambda o: str(o["symbol"]))
+    for o in wire_hints:
+        parts.append(
+            f"【匯撥期限(D-2營)】{o['symbol']} {o['name']}：約需 {o['amount']:,}（對應 {_md_slash(o['lock_start'])} 開盤前扣款）"
+        )
+    for o in loan_hints:
+        parts.append(
+            f"【借款申請(D-1營)】{o['symbol']} {o['name']}：約需 {o['amount']:,}（對應 {_md_slash(o['lock_start'])} 開盤前扣款）"
+        )
+
     debits = [o for o in offers_for_detail if o["lock_start"] == day]
     refunds = [o for o in offers_for_detail if o["refund_date"] == day]
     debits.sort(key=lambda o: str(o["symbol"]))

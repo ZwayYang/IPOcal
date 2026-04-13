@@ -1,9 +1,15 @@
 function parseISODate(s) {
-  // "2026-03-17" -> Date (local)
-  if (!s) return null;
-  const [y, m, d] = s.split("-").map((x) => parseInt(x, 10));
+  // "2026-03-17" -> Date (local)；勿用 dataset（多段 hyphen 在部分環境不可靠），改由 getAttribute 讀取
+  if (!s || typeof s !== "string") return null;
+  const head = s.trim().slice(0, 10);
+  const [y, m, d] = head.split("-").map((x) => parseInt(x, 10));
   if (!y || !m || !d) return null;
   return new Date(y, m - 1, d);
+}
+
+/** 從 <tr> 讀取 data-*（kebab-case），避免 dataset 對 data-wire-by 等屬性映射異常 */
+function readRowDateAttr(row, kebab) {
+  return parseISODate(row.getAttribute(`data-${kebab}`) || "");
 }
 
 function fmtNum(n) {
@@ -30,6 +36,15 @@ function fmtDateMd(d) {
   return `${m}/${day}`;
 }
 
+function sameCalendarDay(a, b) {
+  if (!a || !b) return false;
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
 function getHorizonDays() {
   const el = document.querySelector('input[name="horizon_days"]');
   const v = el ? parseInt(el.value || "30", 10) : 30;
@@ -48,16 +63,16 @@ function selectedOffers() {
   for (const row of rows) {
     const check = row.querySelector(".offer-check");
     if (!check || !check.checked) continue;
-    const amount = parseInt((row.dataset.amount || "").replaceAll(",", ""), 10);
+    const amount = parseInt((row.getAttribute("data-amount") || "").replaceAll(",", ""), 10);
     if (!isFinite(amount) || amount <= 0) continue;
-    const lockStart = parseISODate(row.dataset.lockStart);
-    const refundDate = parseISODate(row.dataset.refundDate);
-    const wireBy = parseISODate(row.dataset.wireBy);
-    const loanBy = parseISODate(row.dataset.loanBy);
+    const lockStart = readRowDateAttr(row, "lock-start");
+    const refundDate = readRowDateAttr(row, "refund-date");
+    const wireBy = readRowDateAttr(row, "wire-by");
+    const loanBy = readRowDateAttr(row, "loan-by");
     if (!lockStart || !refundDate) continue;
     offers.push({
-      symbol: row.dataset.symbol || "",
-      name: row.dataset.name || "",
+      symbol: row.getAttribute("data-symbol") || "",
+      name: row.getAttribute("data-name") || "",
       amount,
       lockStart,
       refundDate,
@@ -139,7 +154,22 @@ function recompute() {
     const tdDetail = document.createElement("td");
     tdDetail.className = "px-4 py-2 text-slate-700";
 
+    const dayDate = parseISODate(r.date);
     const parts = [];
+    for (const o of offers) {
+      if (o.wireBy && dayDate && sameCalendarDay(dayDate, o.wireBy)) {
+        parts.push(
+          `【匯撥期限(D-2營)】${o.symbol} ${o.name}：約需 ${fmtNum(o.amount)}（對應 ${fmtDateMd(o.lockStart)} 開盤前扣款）`
+        );
+      }
+    }
+    for (const o of offers) {
+      if (o.loanBy && dayDate && sameCalendarDay(dayDate, o.loanBy)) {
+        parts.push(
+          `【借款申請(D-1營)】${o.symbol} ${o.name}：約需 ${fmtNum(o.amount)}（對應 ${fmtDateMd(o.lockStart)} 開盤前扣款）`
+        );
+      }
+    }
     if (r.debits.length) {
       const s = r.debits
         .slice()
