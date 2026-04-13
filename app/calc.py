@@ -113,6 +113,23 @@ def available_date_after_refund(refund_date: date) -> date:
     return add_business_days(refund_date, 1)
 
 
+def debit_date_after_subscription_end(sub_end: date) -> date:
+    """
+    申購最後一日（截止日）D 之後，次一營業日開盤前扣款 → 試算用扣款日為 D+1（營業日）。
+    """
+    return add_business_days(sub_end, 1)
+
+
+def funding_wire_by_date(sub_end: date) -> date:
+    """相對截止日 D：D-2（營業日）前完成匯撥的建議日。"""
+    return add_business_days(sub_end, -2)
+
+
+def loan_apply_by_date(sub_end: date) -> date:
+    """相對截止日 D：D-1（營業日）前完成借款申請的建議日。"""
+    return add_business_days(sub_end, -1)
+
+
 def money_windows_for_offer(
     *,
     symbol: str,
@@ -128,7 +145,7 @@ def money_windows_for_offer(
     windows = [
         MoneyWindow(symbol=symbol, name=name, start=lock_start, end=refund_date, amount=amount, kind="apply")
     ]
-    # "win": from sub_start to allot_date (winning)
+    # "win": from lock_start to allot_date (winning)
     if allot_date is not None and allot_date >= lock_start:
         windows.append(MoneyWindow(symbol=symbol, name=name, start=lock_start, end=allot_date, amount=amount, kind="win"))
     return windows

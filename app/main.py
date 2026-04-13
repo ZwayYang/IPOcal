@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 import threading
 from typing import Any
@@ -182,6 +182,8 @@ def index(
     today = date.today()
     horizon_days = max(7, min(int(horizon_days), 365))
     horizon_end = today.fromordinal(today.toordinal() + horizon_days)
+    lookback_days = 5
+    range_start = today - timedelta(days=lookback_days)
 
     offers = []
     windows: list[calc.MoneyWindow] = []
@@ -201,28 +203,38 @@ def index(
 
         if not sub_start or not sub_end or not draw_date:
             continue
-        if sub_end < today:
-            continue
         if sub_start > horizon_end and draw_date > horizon_end:
+            continue
+
+        refund_date = calc.refund_date_estimate(draw_date)
+        debit_date = calc.debit_date_after_subscription_end(sub_end)
+        wire_by_date = calc.funding_wire_by_date(sub_end)
+        loan_apply_by_date = calc.loan_apply_by_date(sub_end)
+
+        overlap_apply = debit_date <= horizon_end and refund_date >= range_start
+        overlap_win = (
+            allot_date is not None
+            and allot_date >= debit_date
+            and debit_date <= horizon_end
+            and allot_date >= range_start
+        )
+        if not (overlap_apply or overlap_win):
             continue
 
         price = calc.parse_price(r["actual_price"]) or calc.parse_price(r["underwritten_price"])
         shares = calc.parse_int_like(r["sub_shares"])
         amount = calc.required_amount(price, shares)
 
-        refund_date = calc.refund_date_estimate(draw_date)
         refund_available_date = calc.available_date_after_refund(refund_date)
         status = _status(today, sub_start, sub_end)
         selected = selected_set is None or r["symbol"] in selected_set
 
         if selected and amount is not None:
-            # Assume debit happens pre-open on the last subscription day (worst-case).
-            lock_start = sub_end
             windows.extend(
                 calc.money_windows_for_offer(
                     symbol=r["symbol"],
                     name=r["name"],
-                    lock_start=lock_start,
+                    lock_start=debit_date,
                     draw_date=draw_date,
                     refund_date=refund_date,
                     allot_date=allot_date,
@@ -241,7 +253,9 @@ def index(
                 "allot_date": allot_date,
                 "refund_date": refund_date,
                 "refund_available_date": refund_available_date,
-                "lock_start": sub_end,
+                "wire_by_date": wire_by_date,
+                "loan_apply_by_date": loan_apply_by_date,
+                "lock_start": debit_date,
                 "price": price,
                 "market_price": r["market_price"],
                 "profit": r["profit"],
@@ -261,7 +275,7 @@ def index(
 
     offers.sort(key=lambda o: (o["sub_start"], o["draw_date"], o["symbol"]))
 
-    daily_apply = calc.daily_required_amount(windows, today, horizon_end, "apply")
+    daily_apply = calc.daily_required_amount(windows, range_start, horizon_end, "apply")
     max_apply = max((amt for _, amt in daily_apply), default=0)
     capital = max(0, int(capital))
     daily_shortfall = [(d, max(0, amt - capital)) for d, amt in daily_apply]
@@ -277,6 +291,8 @@ def index(
         {
             "request": request,
             "today": today,
+            "range_start": range_start,
+            "lookback_days": lookback_days,
             "horizon_days": horizon_days,
             "offers": offers,
             "daily_rows": daily_rows,

@@ -40,7 +40,7 @@
           <div class="flex items-center justify-between gap-3">
             <div>
               <div class="text-sm text-slate-600">試算區間</div>
-              <div class="text-lg font-semibold">從 {{ today }} 起算</div>
+              <div class="text-lg font-semibold">含過去 {{ lookback_days }} 日（{{ range_start }}）＋未來 {{ horizon_days }} 日</div>
             </div>
             <div class="flex items-end gap-2">
               <div>
@@ -71,7 +71,8 @@
         <div class="card">
           <div class="text-sm text-slate-600">重要說明（MVP）</div>
           <ul class="mt-2 list-disc pl-5 text-sm text-slate-700 space-y-1">
-            <li>扣款假設：申購最後一日「開盤前」扣款（以最保守需求試算）。</li>
+            <li>扣款假設：申購截止日為 D 時，於<strong>次一營業日（D+1）開盤前</strong>扣款；資金占用自該日起算至退款日(估)。</li>
+            <li>補資金時程（相對 D，皆為<strong>營業日</strong>）：建議 <strong>D-2 前匯撥入帳</strong>、<strong>D-1 前完成借款申請</strong>（見下表「匯撥/借款」欄）。</li>
             <li>退款假設：抽籤次一營業日「開盤後」入帳，所以同一天無法拿退款去扣另一筆款。</li>
             <li>承銷價未訂出時，金額會顯示為「—」。</li>
             <li>中籤率只有已結案者 TWSE 會填；未結案通常是 0。</li>
@@ -97,7 +98,9 @@
                 <th class="px-3 py-2 text-left">股票代號/名稱</th>
                 <th class="px-3 py-2 text-left">市場</th>
                 <th class="px-3 py-2 text-left">申購</th>
-                <th class="px-3 py-2 text-left">扣款日(估)</th>
+                <th class="px-3 py-2 text-left whitespace-nowrap">匯撥(估)<span class="block text-xs font-normal text-slate-500">D-2營</span></th>
+                <th class="px-3 py-2 text-left whitespace-nowrap">借款(估)<span class="block text-xs font-normal text-slate-500">D-1營</span></th>
+                <th class="px-3 py-2 text-left whitespace-nowrap">扣款(估)<span class="block text-xs font-normal text-slate-500">D+1營</span></th>
                 <th class="px-3 py-2 text-left">退款(估)</th>
                 <th class="px-3 py-2 text-right">承銷張數</th>
                 <th class="px-3 py-2 text-right">承銷價</th>
@@ -129,6 +132,8 @@
                 </td>
                 <td class="px-3 py-2 text-slate-600">{{ o.market }}</td>
                 <td class="px-3 py-2 tabular-nums">{{ o.sub_start.strftime("%m/%d") }} ~ {{ o.sub_end.strftime("%m/%d") }}</td>
+                <td class="px-3 py-2 tabular-nums">{{ o.wire_by_date.strftime("%m/%d") }}</td>
+                <td class="px-3 py-2 tabular-nums">{{ o.loan_apply_by_date.strftime("%m/%d") }}</td>
                 <td class="px-3 py-2 tabular-nums">{{ o.lock_start.strftime("%m/%d") }}</td>
                 <td class="px-3 py-2 tabular-nums">{{ o.refund_date.strftime("%m/%d") }}</td>
                 <td class="px-3 py-2 text-right tabular-nums">{{ o.underwritten_lots }}</td>
@@ -168,7 +173,7 @@
 
       <div class="mt-8 card">
         <div class="text-lg font-semibold">每日資金需求（區間內）</div>
-        <div class="mt-1 text-sm text-slate-600">只計入「已勾選」的申購；預設未中籤（扣款日(估) → 退款日(估)）。</div>
+        <div class="mt-1 text-sm text-slate-600">含過去 {{ lookback_days }} 日可回顧；只計入「已勾選」的申購；預設未中籤（扣款日(估) → 退款日(估)）。</div>
 
         <div class="mt-4 overflow-auto rounded-lg border border-slate-200 bg-white">
           <table class="min-w-full text-sm">
