@@ -6,7 +6,7 @@
     <title>IPOcal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="/static/app.css" />
-    <script defer src="/static/app.js?v=3"></script>
+    <script defer src="/static/app.js?v=4"></script>
   </head>
   <body class="bg-gradient-to-b from-slate-50 via-slate-50 to-slate-100 text-slate-900">
     <div class="mx-auto max-w-6xl px-4 py-8">
@@ -186,12 +186,12 @@
             <tbody id="daily-body" class="divide-y divide-slate-100">
               {% for row in daily_rows %}
               <tr class="hover:bg-slate-50">
-                <td class="px-4 py-2 tabular-nums">{{ row.date }}</td>
+                <td class="px-4 py-2 tabular-nums">{{ row.date.strftime("%m/%d") }}</td>
                 <td class="px-4 py-2 text-right tabular-nums">{{ "{:,}".format(row.required) }}</td>
                 <td class="px-4 py-2 text-right tabular-nums {% if row.shortfall > 0 %}text-rose-700 font-semibold{% else %}text-slate-600{% endif %}">
                   {{ "{:,}".format(row.shortfall) }}
                 </td>
-                <td class="px-4 py-2 text-slate-700 text-sm leading-snug">{{ row.detail }}</td>
+                <td class="px-4 py-2 text-slate-700 text-sm leading-relaxed">{{ row.detail | safe }}</td>
               </tr>
               {% endfor %}
             </tbody>

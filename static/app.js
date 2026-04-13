@@ -36,6 +36,17 @@ function fmtDateMd(d) {
   return `${m}/${day}`;
 }
 
+function escHtml(s) {
+  const el = document.createElement("div");
+  el.textContent = s == null ? "" : String(s);
+  return el.innerHTML;
+}
+
+const WIRE_LBL =
+  '<span class="rounded bg-amber-100 px-1.5 py-0.5 text-sm font-semibold text-amber-900">匯撥期限</span>';
+const LOAN_LBL =
+  '<span class="rounded bg-violet-100 px-1.5 py-0.5 text-sm font-semibold text-violet-900">借款申請</span>';
+
 function sameCalendarDay(a, b) {
   if (!a || !b) return false;
   return (
@@ -140,7 +151,7 @@ function recompute() {
 
     const tdDate = document.createElement("td");
     tdDate.className = "px-4 py-2 tabular-nums";
-    tdDate.textContent = r.date;
+    tdDate.textContent = fmtDateMd(parseISODate(r.date));
 
     const tdReq = document.createElement("td");
     tdReq.className = "px-4 py-2 text-right tabular-nums";
@@ -152,51 +163,52 @@ function recompute() {
     tdSf.textContent = fmtNum(r.shortfall);
 
     const tdDetail = document.createElement("td");
-    tdDetail.className = "px-4 py-2 text-slate-700";
+    tdDetail.className = "px-4 py-2 text-slate-700 text-sm leading-relaxed";
 
     const dayDate = parseISODate(r.date);
-    const parts = [];
-    for (const o of offers) {
-      if (o.wireBy && dayDate && sameCalendarDay(dayDate, o.wireBy)) {
-        parts.push(
-          `【匯撥期限(D-2營)】${o.symbol} ${o.name}：約需 ${fmtNum(o.amount)}（對應 ${fmtDateMd(o.lockStart)} 開盤前扣款）`
-        );
+    const frags = [];
+    const wireSorted = offers
+      .filter((o) => o.wireBy && dayDate && sameCalendarDay(dayDate, o.wireBy))
+      .sort((a, b) => a.symbol.localeCompare(b.symbol));
+    const loanSorted = offers
+      .filter((o) => o.loanBy && dayDate && sameCalendarDay(dayDate, o.loanBy))
+      .sort((a, b) => a.symbol.localeCompare(b.symbol));
+    for (const o of wireSorted) {
+      frags.push(`${WIRE_LBL} ${escHtml(o.symbol)} ${escHtml(o.name)}`);
+    }
+    for (const o of loanSorted) {
+      frags.push(`${LOAN_LBL} ${escHtml(o.symbol)} ${escHtml(o.name)}`);
+    }
+
+    const debSorted = r.debits.slice().sort((a, b) => a.symbol.localeCompare(b.symbol));
+    if (debSorted.length) {
+      frags.push("扣款(開盤前)：");
+      for (const o of debSorted) {
+        let line = `${escHtml(o.symbol)} ${escHtml(o.name)}（${fmtNum(o.amount)}）`;
+        if (o.wireBy && o.loanBy) {
+          line += `；匯撥不晚於 ${fmtDateMd(o.wireBy)}；借款不晚於 ${fmtDateMd(o.loanBy)}`;
+        }
+        frags.push(line);
       }
     }
-    for (const o of offers) {
-      if (o.loanBy && dayDate && sameCalendarDay(dayDate, o.loanBy)) {
-        parts.push(
-          `【借款申請(D-1營)】${o.symbol} ${o.name}：約需 ${fmtNum(o.amount)}（對應 ${fmtDateMd(o.lockStart)} 開盤前扣款）`
-        );
+    const refSorted = r.refunds.slice().sort((a, b) => a.symbol.localeCompare(b.symbol));
+    if (refSorted.length) {
+      frags.push("退款入帳(開盤後)：");
+      for (const o of refSorted) {
+        frags.push(`${escHtml(o.symbol)} ${escHtml(o.name)}（${fmtNum(o.amount)}）`);
       }
     }
-    if (r.debits.length) {
-      const s = r.debits
-        .slice()
-        .sort((a, b) => a.symbol.localeCompare(b.symbol))
-        .map((o) => {
-          let line = `${o.symbol} ${o.name}（${fmtNum(o.amount)}）`;
-          if (o.wireBy && o.loanBy) {
-            line += `；匯撥不晚於 ${fmtDateMd(o.wireBy)}；借款不晚於 ${fmtDateMd(o.loanBy)}`;
-          }
-          return line;
-        })
-        .join("、");
-      parts.push(`扣款(開盤前)：${s}`);
+
+    if (!frags.length) {
+      tdDetail.textContent = "—";
+    } else {
+      let html = frags.join("<br>");
+      if (r.shortfall > 0 && debSorted.length) {
+        html +=
+          '<br><span class="text-rose-700 font-medium">【本日有資金缺口】請於上列各檔期限前備妥款項。</span>';
+      }
+      tdDetail.innerHTML = html;
     }
-    if (r.refunds.length) {
-      const s = r.refunds
-        .slice()
-        .sort((a, b) => a.symbol.localeCompare(b.symbol))
-        .map((o) => `${o.symbol} ${o.name}（${fmtNum(o.amount)}）`)
-        .join("、");
-      parts.push(`退款入帳(開盤後)：${s}`);
-    }
-    let detailText = parts.length ? parts.join("；") : "—";
-    if (r.shortfall > 0 && r.debits.length) {
-      detailText += " 【本日有資金缺口】請於上列各檔期限前備妥款項。";
-    }
-    tdDetail.textContent = detailText;
 
     tr.appendChild(tdDate);
     tr.appendChild(tdReq);

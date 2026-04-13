@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+import html as html_std
 from pathlib import Path
 import threading
 from typing import Any, Sequence
@@ -311,44 +312,52 @@ def _md_slash(d: date) -> str:
     return f"{d.month:02d}/{d.day:02d}"
 
 
-def _daily_detail_line(day: date, offers_for_detail: Sequence[dict[str, Any]], shortfall: int) -> str:
-    """與 static/app.js 明細邏輯一致：D-2/D-1 當日提醒、扣款日附匯撥／借款期限。"""
-    parts: list[str] = []
-    wire_hints = [o for o in offers_for_detail if o["wire_by_date"] == day]
-    loan_hints = [o for o in offers_for_detail if o["loan_apply_by_date"] == day]
-    wire_hints.sort(key=lambda o: str(o["symbol"]))
-    loan_hints.sort(key=lambda o: str(o["symbol"]))
-    for o in wire_hints:
-        parts.append(
-            f"【匯撥期限(D-2營)】{o['symbol']} {o['name']}：約需 {o['amount']:,}（對應 {_md_slash(o['lock_start'])} 開盤前扣款）"
-        )
-    for o in loan_hints:
-        parts.append(
-            f"【借款申請(D-1營)】{o['symbol']} {o['name']}：約需 {o['amount']:,}（對應 {_md_slash(o['lock_start'])} 開盤前扣款）"
-        )
+def _esc_detail(s: Any) -> str:
+    return html_std.escape(str(s), quote=False)
 
-    debits = [o for o in offers_for_detail if o["lock_start"] == day]
-    refunds = [o for o in offers_for_detail if o["refund_date"] == day]
-    debits.sort(key=lambda o: str(o["symbol"]))
-    refunds.sort(key=lambda o: str(o["symbol"]))
+
+_WIRE_LBL = (
+    '<span class="rounded bg-amber-100 px-1.5 py-0.5 text-sm font-semibold text-amber-900">匯撥期限</span>'
+)
+_LOAN_LBL = (
+    '<span class="rounded bg-violet-100 px-1.5 py-0.5 text-sm font-semibold text-violet-900">借款申請</span>'
+)
+
+
+def _daily_detail_line(day: date, offers_for_detail: Sequence[dict[str, Any]], shortfall: int) -> str:
+    """與 static/app.js 一致：標籤高亮、多筆分行、日期僅月/日。"""
+    frags: list[str] = []
+    wire_hints = sorted([o for o in offers_for_detail if o["wire_by_date"] == day], key=lambda o: str(o["symbol"]))
+    loan_hints = sorted([o for o in offers_for_detail if o["loan_apply_by_date"] == day], key=lambda o: str(o["symbol"]))
+    for o in wire_hints:
+        frags.append(f"{_WIRE_LBL} {_esc_detail(o['symbol'])} {_esc_detail(o['name'])}")
+    for o in loan_hints:
+        frags.append(f"{_LOAN_LBL} {_esc_detail(o['symbol'])} {_esc_detail(o['name'])}")
+
+    debits = sorted([o for o in offers_for_detail if o["lock_start"] == day], key=lambda o: str(o["symbol"]))
+    refunds = sorted([o for o in offers_for_detail if o["refund_date"] == day], key=lambda o: str(o["symbol"]))
+
     if debits:
-        chunks: list[str] = []
+        frags.append("扣款(開盤前)：")
         for o in debits:
-            w = o["wire_by_date"]
-            l = o["loan_apply_by_date"]
-            chunks.append(
-                f"{o['symbol']} {o['name']}（{o['amount']:,}）；"
+            w, l = o["wire_by_date"], o["loan_apply_by_date"]
+            frags.append(
+                f"{_esc_detail(o['symbol'])} {_esc_detail(o['name'])}（{o['amount']:,}）；"
                 f"匯撥不晚於 {_md_slash(w)}；借款不晚於 {_md_slash(l)}"
             )
-        parts.append("扣款(開盤前)：" + "、".join(chunks))
     if refunds:
-        chunks = [f"{o['symbol']} {o['name']}（{o['amount']:,}）" for o in refunds]
-        parts.append("退款入帳(開盤後)：" + "、".join(chunks))
-    if not parts:
+        frags.append("退款入帳(開盤後)：")
+        for o in refunds:
+            frags.append(f"{_esc_detail(o['symbol'])} {_esc_detail(o['name'])}（{o['amount']:,}）")
+
+    if not frags:
         return "—"
-    out = "；".join(parts)
+    out = "<br>".join(frags)
     if shortfall > 0 and debits:
-        out += " 【本日有資金缺口】請於上列各檔期限前備妥款項。"
+        out += (
+            '<br><span class="text-rose-700 font-medium">'
+            "【本日有資金缺口】請於上列各檔期限前備妥款項。</span>"
+        )
     return out
 
 
