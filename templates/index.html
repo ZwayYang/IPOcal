@@ -40,7 +40,7 @@
           <div class="flex items-center justify-between gap-3">
             <div>
               <div class="text-sm text-slate-600">試算區間</div>
-              <div class="text-lg font-semibold">含過去 {{ lookback_days }} 日（{{ range_start }}）＋未來 {{ horizon_days }} 日</div>
+              <div class="text-lg font-semibold">從 {{ today }} 起算未來 {{ horizon_days }} 日</div>
             </div>
             <div class="flex items-end gap-2">
               <div>
@@ -173,7 +173,7 @@
 
       <div class="mt-8 card">
         <div class="text-lg font-semibold">每日資金需求（區間內）</div>
-        <div class="mt-1 text-sm text-slate-600">含過去 {{ lookback_days }} 日可回顧；只計入「已勾選」的申購；預設未中籤（扣款日(估) → 退款日(估)）。</div>
+        <div class="mt-1 text-sm text-slate-600">只計入「已勾選」的申購；預設未中籤（扣款日(估) → 退款日(估)）。</div>
 
         <div class="mt-4 overflow-auto rounded-lg border border-slate-200 bg-white">
           <table class="min-w-full text-sm">

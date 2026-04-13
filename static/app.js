@@ -23,9 +23,6 @@ function addDays(d, days) {
   return x;
 }
 
-/** 與後端 index 一致：每日表可回顧過去幾天 */
-const LOOKBACK_DAYS = 5;
-
 function getHorizonDays() {
   const el = document.querySelector('input[name="horizon_days"]');
   const v = el ? parseInt(el.value || "30", 10) : 30;
@@ -62,10 +59,9 @@ function selectedOffers() {
 
 function recompute() {
   const today = new Date();
-  const today0 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const start = addDays(today0, -LOOKBACK_DAYS);
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const horizonDays = getHorizonDays();
-  const end = addDays(today0, horizonDays);
+  const end = addDays(start, horizonDays);
   const capital = getCapital();
   const offers = selectedOffers();
 
