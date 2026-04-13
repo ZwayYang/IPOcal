@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from pathlib import Path
 import threading
-from typing import Any
+from typing import Any, Sequence
 import traceback
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -270,9 +270,18 @@ def index(
     capital = max(0, int(capital))
     daily_shortfall = [(d, max(0, amt - capital)) for d, amt in daily_apply]
     max_borrow = max((sf for _, sf in daily_shortfall), default=0)
-    daily_rows = [
-        {"date": d, "required": amt, "shortfall": max(0, amt - capital)} for d, amt in daily_apply
-    ]
+    offers_for_detail = [o for o in offers if o["selected"] and o["amount"] is not None]
+    daily_rows = []
+    for d, amt in daily_apply:
+        sf = max(0, amt - capital)
+        daily_rows.append(
+            {
+                "date": d,
+                "required": amt,
+                "shortfall": sf,
+                "detail": _daily_detail_line(d, offers_for_detail, sf),
+            }
+        )
     selected_count = sum(1 for o in offers if o["selected"])
 
     return _render(
@@ -296,6 +305,38 @@ def index(
 def index_head() -> Response:
     # Render health check probes HEAD /
     return Response(status_code=200)
+
+
+def _md_slash(d: date) -> str:
+    return f"{d.month:02d}/{d.day:02d}"
+
+
+def _daily_detail_line(day: date, offers_for_detail: Sequence[dict[str, Any]], shortfall: int) -> str:
+    """與 static/app.js 明細邏輯一致：扣款日列匯撥(D-2營)/借款(D-1營)期限。"""
+    parts: list[str] = []
+    debits = [o for o in offers_for_detail if o["lock_start"] == day]
+    refunds = [o for o in offers_for_detail if o["refund_date"] == day]
+    debits.sort(key=lambda o: str(o["symbol"]))
+    refunds.sort(key=lambda o: str(o["symbol"]))
+    if debits:
+        chunks: list[str] = []
+        for o in debits:
+            w = o["wire_by_date"]
+            l = o["loan_apply_by_date"]
+            chunks.append(
+                f"{o['symbol']} {o['name']}（{o['amount']:,}）；"
+                f"匯撥不晚於 {_md_slash(w)}；借款不晚於 {_md_slash(l)}"
+            )
+        parts.append("扣款(開盤前)：" + "、".join(chunks))
+    if refunds:
+        chunks = [f"{o['symbol']} {o['name']}（{o['amount']:,}）" for o in refunds]
+        parts.append("退款入帳(開盤後)：" + "、".join(chunks))
+    if not parts:
+        return "—"
+    out = "；".join(parts)
+    if shortfall > 0 and debits:
+        out += " 【本日有資金缺口】請於上列各檔期限前備妥款項。"
+    return out
 
 
 def _status(today: date, sub_start: date, sub_end: date) -> str:

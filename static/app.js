@@ -23,6 +23,13 @@ function addDays(d, days) {
   return x;
 }
 
+function fmtDateMd(d) {
+  if (!d) return "—";
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${m}/${day}`;
+}
+
 function getHorizonDays() {
   const el = document.querySelector('input[name="horizon_days"]');
   const v = el ? parseInt(el.value || "30", 10) : 30;
@@ -45,6 +52,8 @@ function selectedOffers() {
     if (!isFinite(amount) || amount <= 0) continue;
     const lockStart = parseISODate(row.dataset.lockStart);
     const refundDate = parseISODate(row.dataset.refundDate);
+    const wireBy = parseISODate(row.dataset.wireBy);
+    const loanBy = parseISODate(row.dataset.loanBy);
     if (!lockStart || !refundDate) continue;
     offers.push({
       symbol: row.dataset.symbol || "",
@@ -52,6 +61,8 @@ function selectedOffers() {
       amount,
       lockStart,
       refundDate,
+      wireBy,
+      loanBy,
     });
   }
   return offers;
@@ -133,7 +144,13 @@ function recompute() {
       const s = r.debits
         .slice()
         .sort((a, b) => a.symbol.localeCompare(b.symbol))
-        .map((o) => `${o.symbol} ${o.name}（${fmtNum(o.amount)}）`)
+        .map((o) => {
+          let line = `${o.symbol} ${o.name}（${fmtNum(o.amount)}）`;
+          if (o.wireBy && o.loanBy) {
+            line += `；匯撥不晚於 ${fmtDateMd(o.wireBy)}；借款不晚於 ${fmtDateMd(o.loanBy)}`;
+          }
+          return line;
+        })
         .join("、");
       parts.push(`扣款(開盤前)：${s}`);
     }
@@ -145,7 +162,11 @@ function recompute() {
         .join("、");
       parts.push(`退款入帳(開盤後)：${s}`);
     }
-    tdDetail.textContent = parts.length ? parts.join("；") : "—";
+    let detailText = parts.length ? parts.join("；") : "—";
+    if (r.shortfall > 0 && r.debits.length) {
+      detailText += " 【本日有資金缺口】請於上列各檔期限前備妥款項。";
+    }
+    tdDetail.textContent = detailText;
 
     tr.appendChild(tdDate);
     tr.appendChild(tdReq);
