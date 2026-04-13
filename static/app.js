@@ -184,11 +184,7 @@ function recompute() {
     if (debSorted.length) {
       frags.push("扣款(開盤前)：");
       for (const o of debSorted) {
-        let line = `${escHtml(o.symbol)} ${escHtml(o.name)}（${fmtNum(o.amount)}）`;
-        if (o.wireBy && o.loanBy) {
-          line += `；匯撥不晚於 ${fmtDateMd(o.wireBy)}；借款不晚於 ${fmtDateMd(o.loanBy)}`;
-        }
-        frags.push(line);
+        frags.push(`${escHtml(o.symbol)} ${escHtml(o.name)}（${fmtNum(o.amount)}）`);
       }
     }
     const refSorted = r.refunds.slice().sort((a, b) => a.symbol.localeCompare(b.symbol));
@@ -202,12 +198,7 @@ function recompute() {
     if (!frags.length) {
       tdDetail.textContent = "—";
     } else {
-      let html = frags.join("<br>");
-      if (r.shortfall > 0 && debSorted.length) {
-        html +=
-          '<br><span class="text-rose-700 font-medium">【本日有資金缺口】請於上列各檔期限前備妥款項。</span>';
-      }
-      tdDetail.innerHTML = html;
+      tdDetail.innerHTML = frags.join("<br>");
     }
 
     tr.appendChild(tdDate);

@@ -280,7 +280,7 @@ def index(
                 "date": d,
                 "required": amt,
                 "shortfall": sf,
-                "detail": _daily_detail_line(d, offers_for_detail, sf),
+                "detail": _daily_detail_line(d, offers_for_detail),
             }
         )
     selected_count = sum(1 for o in offers if o["selected"])
@@ -308,10 +308,6 @@ def index_head() -> Response:
     return Response(status_code=200)
 
 
-def _md_slash(d: date) -> str:
-    return f"{d.month:02d}/{d.day:02d}"
-
-
 def _esc_detail(s: Any) -> str:
     return html_std.escape(str(s), quote=False)
 
@@ -324,8 +320,8 @@ _LOAN_LBL = (
 )
 
 
-def _daily_detail_line(day: date, offers_for_detail: Sequence[dict[str, Any]], shortfall: int) -> str:
-    """與 static/app.js 一致：標籤高亮、多筆分行、日期僅月/日。"""
+def _daily_detail_line(day: date, offers_for_detail: Sequence[dict[str, Any]]) -> str:
+    """與 static/app.js 一致：標籤高亮、多筆分行；扣款行僅代號/名稱/金額。"""
     frags: list[str] = []
     wire_hints = sorted([o for o in offers_for_detail if o["wire_by_date"] == day], key=lambda o: str(o["symbol"]))
     loan_hints = sorted([o for o in offers_for_detail if o["loan_apply_by_date"] == day], key=lambda o: str(o["symbol"]))
@@ -340,11 +336,7 @@ def _daily_detail_line(day: date, offers_for_detail: Sequence[dict[str, Any]], s
     if debits:
         frags.append("扣款(開盤前)：")
         for o in debits:
-            w, l = o["wire_by_date"], o["loan_apply_by_date"]
-            frags.append(
-                f"{_esc_detail(o['symbol'])} {_esc_detail(o['name'])}（{o['amount']:,}）；"
-                f"匯撥不晚於 {_md_slash(w)}；借款不晚於 {_md_slash(l)}"
-            )
+            frags.append(f"{_esc_detail(o['symbol'])} {_esc_detail(o['name'])}（{o['amount']:,}）")
     if refunds:
         frags.append("退款入帳(開盤後)：")
         for o in refunds:
@@ -352,13 +344,7 @@ def _daily_detail_line(day: date, offers_for_detail: Sequence[dict[str, Any]], s
 
     if not frags:
         return "—"
-    out = "<br>".join(frags)
-    if shortfall > 0 and debits:
-        out += (
-            '<br><span class="text-rose-700 font-medium">'
-            "【本日有資金缺口】請於上列各檔期限前備妥款項。</span>"
-        )
-    return out
+    return "<br>".join(frags)
 
 
 def _status(today: date, sub_start: date, sub_end: date) -> str:
