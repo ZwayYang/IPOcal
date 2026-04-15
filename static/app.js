@@ -46,6 +46,7 @@ const WIRE_LBL =
   '<span class="rounded bg-amber-100 px-1.5 py-0.5 text-sm font-semibold text-amber-900">匯撥期限</span>';
 const LOAN_LBL =
   '<span class="rounded bg-violet-100 px-1.5 py-0.5 text-sm font-semibold text-violet-900">借款申請</span>';
+const LOOKBACK_DAYS = 5;
 
 function sameCalendarDay(a, b) {
   if (!a || !b) return false;
@@ -96,9 +97,10 @@ function selectedOffers() {
 
 function recompute() {
   const today = new Date();
-  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const today0 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const start = addDays(today0, -LOOKBACK_DAYS);
   const horizonDays = getHorizonDays();
-  const end = addDays(start, horizonDays);
+  const end = addDays(today0, horizonDays);
   const capital = getCapital();
   const offers = selectedOffers();
 
@@ -158,9 +160,10 @@ function recompute() {
     tdReq.textContent = fmtNum(r.required);
 
     const tdSf = document.createElement("td");
+    const delta = capital - r.required;
     tdSf.className =
-      "px-4 py-2 text-right tabular-nums " + (r.shortfall > 0 ? "text-rose-700 font-semibold" : "text-slate-600");
-    tdSf.textContent = fmtNum(r.shortfall);
+      "px-4 py-2 text-right tabular-nums " + (delta < 0 ? "text-emerald-700 font-semibold" : "text-rose-700 font-semibold");
+    tdSf.textContent = delta < 0 ? `-${fmtNum(-delta)}` : `+${fmtNum(delta)}`;
 
     const tdDetail = document.createElement("td");
     tdDetail.className = "px-4 py-2 text-slate-700 text-sm leading-relaxed";

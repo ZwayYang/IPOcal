@@ -6,7 +6,7 @@
     <title>IPOcal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="/static/app.css" />
-    <script defer src="/static/app.js?v=5"></script>
+    <script defer src="/static/app.js?v=7"></script>
   </head>
   <body class="bg-gradient-to-b from-slate-50 via-slate-50 to-slate-100 text-slate-900">
     <div class="mx-auto max-w-6xl px-4 py-8">
@@ -40,7 +40,7 @@
           <div class="flex items-center justify-between gap-3">
             <div>
               <div class="text-sm text-slate-600">試算區間</div>
-              <div class="text-lg font-semibold">從 {{ today }} 起算未來 {{ horizon_days }} 日</div>
+              <div class="text-lg font-semibold">含過去 {{ lookback_days }} 日（{{ range_start }}）＋未來 {{ horizon_days }} 日</div>
             </div>
             <div class="flex items-end gap-2">
               <div>
@@ -171,7 +171,7 @@
 
       <div class="mt-8 card">
         <div class="text-lg font-semibold">每日資金需求（區間內）</div>
-        <div class="mt-1 text-sm text-slate-600">只計入「已勾選」的申購；預設未中籤（扣款日(估) → 退款日(估)）。明細中匯撥／借款期限為相對申購截止日 D 之 D-2、D-1 營業日。</div>
+        <div class="mt-1 text-sm text-slate-600">含過去 {{ lookback_days }} 日可回顧；只計入「已勾選」的申購；預設未中籤（扣款日(估) → 退款日(估)）。明細中匯撥／借款期限為相對申購截止日 D 之 D-2、D-1 營業日。</div>
 
         <div class="mt-4 overflow-auto rounded-lg border border-slate-200 bg-white">
           <table class="min-w-full text-sm">
@@ -188,8 +188,9 @@
               <tr class="hover:bg-slate-50">
                 <td class="px-4 py-2 tabular-nums">{{ row.date.strftime("%m/%d") }}</td>
                 <td class="px-4 py-2 text-right tabular-nums">{{ "{:,}".format(row.required) }}</td>
-                <td class="px-4 py-2 text-right tabular-nums {% if row.shortfall > 0 %}text-rose-700 font-semibold{% else %}text-slate-600{% endif %}">
-                  {{ "{:,}".format(row.shortfall) }}
+                {% set delta = capital - row.required %}
+                <td class="px-4 py-2 text-right tabular-nums {% if delta < 0 %}text-emerald-700 font-semibold{% else %}text-rose-700 font-semibold{% endif %}">
+                  {% if delta < 0 %}-{{ "{:,}".format(-delta) }}{% else %}+{{ "{:,}".format(delta) }}{% endif %}
                 </td>
                 <td class="px-4 py-2 text-slate-700 text-sm leading-relaxed">{{ row.detail | safe }}</td>
               </tr>
